@@ -36,7 +36,7 @@ func main() {
 	}
 	listenAddr := os.Getenv("LISTEN_ADDR")
 	if listenAddr == "" {
-		listenAddr = "localhost:8080"
+		listenAddr = "localhost:11300"
 	}
 
 	s := &server{

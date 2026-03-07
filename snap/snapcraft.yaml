@@ -18,7 +18,7 @@ apps:
       - network-bind
     environment:
       REDIS_ADDR: "localhost:6379"
-      LISTEN_ADDR: "localhost:8080"
+      LISTEN_ADDR: "localhost:11300"
 
   redis-server:
     command: bin/redis-server-wrapper

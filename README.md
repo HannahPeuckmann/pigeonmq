@@ -60,7 +60,7 @@ A Redis-backed distributed job queue service.
 ### Environment Variables
 
 - `REDIS_ADDR` - Redis server address (default: `localhost:6379`)
-- `LISTEN_ADDR` - HTTP server listen address (default: `localhost:8080`)
+- `LISTEN_ADDR` - HTTP server listen address (default: `localhost:11300`)
 
 ### For systemd service:
 
