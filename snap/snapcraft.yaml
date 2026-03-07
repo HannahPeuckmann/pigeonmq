@@ -1,0 +1,60 @@
+name: awesomequeue
+base: core24
+version: '1.0'
+summary: A distributed job queue service
+description: |
+  AwesomeQueue is a Redis-backed job queue service that manages
+  distributed workers and job processing via an HTTP interface.
+
+grade: stable
+confinement: strict
+
+apps:
+  awesomequeue:
+    command: bin/awesomequeue-server
+    daemon: simple
+    plugs:
+      - network
+      - network-bind
+    environment:
+      REDIS_ADDR: "localhost:6379"
+      LISTEN_ADDR: "localhost:11300"
+
+  redis-server:
+    command: bin/redis-server-wrapper
+    daemon: simple
+    plugs:
+      - network
+      - network-bind
+
+parts:
+  awesomequeue:
+    plugin: go
+    source: ./service
+    source-type: local
+    build-snaps:
+      - go/1.24/stable
+    override-build: |
+      go build -o $SNAPCRAFT_PART_INSTALL/bin/awesomequeue-server main.go
+
+  redis:
+    plugin: nil
+    stage-packages:
+      - redis-server
+    override-build: |
+      craftctl default
+      mkdir -p $SNAPCRAFT_PART_INSTALL/bin
+
+  redis-wrapper:
+    plugin: dump
+    source: snap/local
+    source-type: local
+    organize:
+      redis-server-wrapper.sh: bin/redis-server-wrapper
+
+  templates:
+    plugin: dump
+    source: service/templates
+    source-type: local
+    organize:
+      '*': templates/

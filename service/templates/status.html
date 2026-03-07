@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<title>AwesomeQueue Status</title>
+
+<style>
+.table-bordered {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: sans-serif;
+    font-size: 0.9rem;
+}
+
+.table-bordered thead {
+    background-color: #f2f2f2;
+}
+
+.table-bordered th,
+.table-bordered td {
+    border: 1px solid #dddddd;
+    text-align: left;
+    padding: 8px;
+}
+
+h2 {
+    font-family: sans-serif;
+    margin-top: 2rem;
+}
+</style>
+
+<h2>Jobs</h2>
+<table class="table-bordered">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Status</th>
+            <th>Priority</th>
+            <th>Payload</th>
+            <th>Worker</th>
+        </tr>
+    </thead>
+    <tbody>
+        {{range .Jobs}}
+        <tr>
+            <td>{{.ID}}</td>
+            <td>{{.Status}}</td>
+            <td>{{.Priority}}</td>
+            <td>{{printf "%s" .Payload}}</td>
+            <td>{{.Worker}}</td>
+        </tr>
+        {{else}}
+        <tr><td colspan="4">No jobs</td></tr>
+        {{end}}
+    </tbody>
+</table>
+
+<h2>Workers</h2>
+<table class="table-bordered">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Nickname</th>
+            <th>Job</th>
+            <th>Last Heartbeat</th>
+            <th>Status</th>
+        </tr>
+    </thead>
+    <tbody>
+        {{range .Workers}}
+        <tr>
+            <td>{{.ID}}</td>
+            <td>{{.Nickname}}</td>
+            <td>{{.Job}}</td>
+            <td>{{.LastHeartbeat}}</td>
+            <td>{{.Status}}</td>
+        </tr>
+        {{else}}
+        <tr><td colspan="5">No workers</td></tr>
+        {{end}}
+    </tbody>
+</table>
+
+<h2>Worker History</h2>
+<table class="table-bordered">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Nickname</th>
+        </tr>
+    </thead>
+    <tbody>
+        {{range .DeadWorkers}}
+        <tr>
+            <td>{{.ID}}</td>
+            <td>{{.Nickname}}</td>
+        </tr>
+        {{else}}
+        <tr><td colspan="2">No workers</td></tr>
+        {{end}}
+    </tbody>
+</table>
