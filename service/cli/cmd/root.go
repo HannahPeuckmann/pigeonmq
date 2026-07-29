@@ -54,7 +54,7 @@ func init() {
 	rootCmd.AddCommand(statusCmd)
 	rootCmd.AddCommand(jobStatusCmd)
 	rootCmd.AddCommand(queueCmd)
-	rootCmd.AddCommand(deleteCmd)
+	rootCmd.AddCommand(cancelCmd)
 }
 
 var statusCmd = &cobra.Command{
@@ -156,11 +156,31 @@ var queueCmd = &cobra.Command{
 	},
 }
 
-var deleteCmd = &cobra.Command{
-	Use:   "delete [job_id]",
-	Short: "Delete a job",
+var cancelCmd = &cobra.Command{
+	Use:   "cancel [job_id]",
+	Short: "Cancel a queued job",
 	Args:  cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
+		cancelURL, err := url.Parse(fmt.Sprintf("%s/cancel/", serverAddr))
+		if err != nil {
+			slog.Error("error parsing cancel url", "err", err)
+			return
+		}
+		query := cancelURL.Query()
+		query.Add("job", args[0])
+		cancelURL.RawQuery = query.Encode()
+
+		resp, err := http.Post(cancelURL.String(), "", nil)
+		if err != nil {
+			slog.Error("An Error Occured", "error", err)
+			return
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			slog.Error("cancel: unexpected status", "status", resp.StatusCode)
+			return
+		}
+		fmt.Printf("cancelled job %s\n", args[0])
 
 	},
 }

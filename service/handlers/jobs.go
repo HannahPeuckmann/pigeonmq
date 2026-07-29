@@ -90,7 +90,9 @@ func ReserveJob(ctx context.Context, rdb *redis.Client, workerID string) (Job, e
 	return job, nil
 }
 
-func DeleteJob(ctx context.Context, rdb *redis.Client, workerID string) error {
+// CompleteJob is called by a worker to mark its currently-assigned job done
+// and free itself up for the next one.
+func CompleteJob(ctx context.Context, rdb *redis.Client, workerID string) error {
 	workerKey := fmt.Sprintf("worker: %s", workerID)
 
 	exists, err := rdb.Exists(ctx, workerKey).Result()
@@ -100,7 +102,6 @@ func DeleteJob(ctx context.Context, rdb *redis.Client, workerID string) error {
 	if exists == 0 {
 		return fmt.Errorf("worker not registered: %w", ErrNotFound)
 	}
-
 	jobID, err := rdb.HGet(ctx, workerKey, "jobID").Result()
 	if err != nil {
 		return fmt.Errorf("failed to read job id from redis: %w", err)
@@ -108,7 +109,6 @@ func DeleteJob(ctx context.Context, rdb *redis.Client, workerID string) error {
 	if jobID == "none" {
 		return fmt.Errorf("worker has no job assigned: %w", ErrConflict)
 	}
-
 	jobKey := fmt.Sprintf("job: %s", jobID)
 
 	p := rdb.Pipeline()
@@ -118,10 +118,39 @@ func DeleteJob(ctx context.Context, rdb *redis.Client, workerID string) error {
 	p.HSet(ctx, workerKey, "status", "IDLE")
 	p.HSet(ctx, workerKey, "jobID", "none")
 
-	if _, err := p.Exec(ctx); err != nil {
+	_, err = p.Exec(ctx)
+	return err
+}
+
+// CancelJob cancels a job that hasn't started building yet, removing it from
+// its tube so no worker will ever reserve it.
+func CancelJob(ctx context.Context, rdb *redis.Client, jobID string) error {
+	jobKey := fmt.Sprintf("job: %s", jobID)
+
+	exists, err := rdb.Exists(ctx, jobKey).Result()
+	if err != nil {
 		return err
 	}
-	return nil
+	if exists == 0 {
+		return fmt.Errorf("job does not exist: %w", ErrNotFound)
+	}
+
+	jobData, err := rdb.HGetAll(ctx, jobKey).Result()
+	if err != nil {
+		return fmt.Errorf("failed to read job from redis: %w", err)
+	}
+	if jobData["status"] != "QUEUED" {
+		return fmt.Errorf("job is not queued, can not be cancelled: %w", ErrConflict)
+	}
+
+	p := rdb.Pipeline()
+	p.HSet(ctx, jobKey, "status", "DONE")
+	p.HSet(ctx, jobKey, "build-finish", time.Now())
+	p.Expire(ctx, jobKey, 5*24*time.Hour)
+	p.ZRem(ctx, jobData["queue"], jobKey)
+
+	_, err = p.Exec(ctx)
+	return err
 }
 
 func QueueJob(ctx context.Context, rdb *redis.Client, body []byte, priority float64, queueName string) (int64, error) {

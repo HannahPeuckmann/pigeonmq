@@ -48,7 +48,8 @@ func main() {
 	}
 
 	http.HandleFunc("/reserve/", s.reserveHandler)
-	http.HandleFunc("/delete/", s.deleteHandler)
+	http.HandleFunc("/complete/", s.completeHandler)
+	http.HandleFunc("/cancel/", s.cancelHandler)
 	http.HandleFunc("/register/", s.registerWorkerHandler)
 	http.HandleFunc("/unregister/", s.unregisterWorkerHandler)
 	http.HandleFunc("/queue/", s.queueHandler)
@@ -94,14 +95,16 @@ func (s *server) reserveHandler(w http.ResponseWriter, r *http.Request) {
 	slog.Info("Reserve", "worker", workerID, "job", job.ID)
 }
 
-func (s *server) deleteHandler(w http.ResponseWriter, r *http.Request) {
+// completeHandler is called by a worker to mark its currently-assigned job
+// done and free itself up for the next one.
+func (s *server) completeHandler(w http.ResponseWriter, r *http.Request) {
 	workerID := r.URL.Query().Get("worker")
 	if workerID == "" {
 		http.Error(w, "invalid worker ID: must not be empty", http.StatusBadRequest)
 		return
 	}
 
-	err := handlers.DeleteJob(r.Context(), s.rdb, workerID)
+	err := handlers.CompleteJob(r.Context(), s.rdb, workerID)
 	switch {
 	case errors.Is(err, handlers.ErrNotFound):
 		http.Error(w, err.Error(), http.StatusNotFound)
@@ -110,7 +113,30 @@ func (s *server) deleteHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusConflict)
 		return
 	case err != nil:
-		slog.Error("error deleting job", "err", err, "worker", workerID)
+		slog.Error("error completing job", "err", err, "worker", workerID)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+// cancelHandler cancels a job that hasn't started building yet.
+func (s *server) cancelHandler(w http.ResponseWriter, r *http.Request) {
+	jobID := r.URL.Query().Get("job")
+	if jobID == "" {
+		http.Error(w, "invalid job: must not be empty", http.StatusBadRequest)
+		return
+	}
+
+	err := handlers.CancelJob(r.Context(), s.rdb, jobID)
+	switch {
+	case errors.Is(err, handlers.ErrNotFound):
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	case errors.Is(err, handlers.ErrConflict):
+		http.Error(w, err.Error(), http.StatusConflict)
+		return
+	case err != nil:
+		slog.Error("error cancelling job", "err", err, "job", jobID)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

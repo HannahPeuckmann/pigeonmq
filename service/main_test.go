@@ -425,9 +425,9 @@ func TestReserveHandler_MissingWorkerParam(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
-// --- DeleteHandler ---
+// --- completeHandler ---
 
-func TestDeleteHandler_SetPropertiesOnJobAndWorker(t *testing.T) {
+func TestCompleteHandler_SetPropertiesOnJobAndWorker(t *testing.T) {
 	mr.FlushAll()
 
 	ctx := context.Background()
@@ -437,9 +437,9 @@ func TestDeleteHandler_SetPropertiesOnJobAndWorker(t *testing.T) {
 	rdb.HSet(ctx, jobKey, "id", "7", "status", "BUILDING")
 	rdb.LPush(ctx, "job_queue", jobKey)
 
-	req := newQueryRequest(http.MethodPost, "/delete/", map[string]string{"worker": "worker-30"})
+	req := newQueryRequest(http.MethodPost, "/complete/", map[string]string{"worker": "worker-30"})
 	w := httptest.NewRecorder()
-	srv.deleteHandler(w, req)
+	srv.completeHandler(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
@@ -456,34 +456,92 @@ func TestDeleteHandler_SetPropertiesOnJobAndWorker(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestDeleteHandler_WorkerIsIdle(t *testing.T) {
+func TestCompleteHandler_WorkerIsIdle(t *testing.T) {
 	mr.FlushAll()
 
 	ctx := context.Background()
 	workerKey := "worker: worker-30"
 	rdb.HSet(ctx, workerKey, "status", "IDLE", "jobID", "none", "lastHeartbeat", "0")
 
-	req := newQueryRequest(http.MethodPost, "/delete/", map[string]string{"worker": "worker-30"})
+	req := newQueryRequest(http.MethodPost, "/complete/", map[string]string{"worker": "worker-30"})
 	w := httptest.NewRecorder()
-	srv.deleteHandler(w, req)
+	srv.completeHandler(w, req)
 
 	assert.Equal(t, http.StatusConflict, w.Code)
 }
 
-func TestDeleteHandler_MissingWorkerParam(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPost, "/delete/", nil)
+func TestCompleteHandler_MissingWorkerParam(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/complete/", nil)
 	w := httptest.NewRecorder()
-	srv.deleteHandler(w, req)
+	srv.completeHandler(w, req)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
-func TestDeleteHandler_WorkerNotRegistered(t *testing.T) {
+func TestCompleteHandler_WorkerNotRegistered(t *testing.T) {
 	mr.FlushAll()
 
-	req := newQueryRequest(http.MethodPost, "/delete/", map[string]string{"worker": "ghost-worker"})
+	req := newQueryRequest(http.MethodPost, "/complete/", map[string]string{"worker": "ghost-worker"})
 	w := httptest.NewRecorder()
-	srv.deleteHandler(w, req)
+	srv.completeHandler(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+// --- cancelHandler ---
+
+func TestCancelHandler_CancelsQueuedJob(t *testing.T) {
+	mr.FlushAll()
+
+	ctx := context.Background()
+	jobKey := "job: 7"
+	queueName := "default"
+	rdb.HSet(ctx, jobKey, "id", "7", "status", "QUEUED", "priority", "2", "queue", queueName)
+	rdb.ZAdd(ctx, queueName, redis.Z{Score: 2, Member: jobKey})
+
+	req := newQueryRequest(http.MethodPost, "/cancel/", map[string]string{"job": "7"})
+	w := httptest.NewRecorder()
+	srv.cancelHandler(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	newJobStatus, err := rdb.HGet(ctx, jobKey, "status").Result()
+	require.NoError(t, err)
+	assert.Equal(t, "DONE", newJobStatus)
+
+	// a cancelled job must also come off its priority queue, otherwise a
+	// worker can still reserve it later despite it being marked DONE.
+	_, err = rdb.ZScore(ctx, queueName, jobKey).Result()
+	assert.ErrorIs(t, err, redis.Nil, "job should have been removed from its queue")
+}
+
+func TestCancelHandler_JobNotQueued(t *testing.T) {
+	mr.FlushAll()
+
+	ctx := context.Background()
+	rdb.HSet(ctx, "job: 7", "id", "7", "status", "BUILDING", "queue", "default")
+
+	req := newQueryRequest(http.MethodPost, "/cancel/", map[string]string{"job": "7"})
+	w := httptest.NewRecorder()
+	srv.cancelHandler(w, req)
+
+	assert.Equal(t, http.StatusConflict, w.Code)
+}
+
+func TestCancelHandler_MissingJobParam(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/cancel/", nil)
+	w := httptest.NewRecorder()
+	srv.cancelHandler(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestCancelHandler_JobNotFound(t *testing.T) {
+	mr.FlushAll()
+
+	req := newQueryRequest(http.MethodPost, "/cancel/", map[string]string{"job": "does-not-exist"})
+	w := httptest.NewRecorder()
+	srv.cancelHandler(w, req)
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }

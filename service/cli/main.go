@@ -21,8 +21,8 @@ The available commands:
 	queue [body] --tube <tube>
 	    Queue a job on a tube, with an optional --priority.
 
-	delete [job_id]
-	    Delete a job. Registered but not yet implemented.
+	cancel [job_id]
+	    Cancel a queued job. Registered but not yet implemented.
 */
 package main
 

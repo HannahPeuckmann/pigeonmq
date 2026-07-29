@@ -80,7 +80,8 @@ Snap uses the defaults in the snapcraft.yaml. To modify, rebuild the snap.
 - `POST /unregister/?worker=<id>` - Unregister a worker
 - `POST /queue/?queue=<name>&priority=<0-3>` - Queue a new job, body is the raw job payload; `priority` is optional (0=urgent, 1=high, 2=medium (default), 3=low); returns `{"jobID": <int>}`
 - `POST /reserve/?worker=<id>` - Reserve a job for processing; returns `200` with the job, or `204` if no job is available
-- `POST /delete/?worker=<id>` - Mark the worker's in-progress job as done
+- `POST /complete/?worker=<id>` - Called by a worker to mark its currently-assigned job done
+- `POST /cancel/?job=<id>` - Cancel a job that hasn't started building yet (must still be `QUEUED`)
 - `POST /heartbeat/?worker=<id>` - Worker heartbeat
 - `GET /aggregate-status/?queue=<name>` - Get queue status counts as JSON (`totalWorkers`, `idleWorkers`, `busyWorkers`, `jobsReady`, `jobsReserved`, `jobsDone`); `queue` is optional and scopes the counts to one tube
 - `GET /job-status/?job=<id>` - Get a single job's status by ID
@@ -102,7 +103,7 @@ awesomequeue.cli queue <body> --tube <tube> [--priority urgent|high|medium|low]
                                                       # queue a job (default priority: medium)
 ```
 
-`delete <job_id>` is registered but not yet implemented.
+`cancel <job_id>` is registered but not yet implemented.
 
 Run `sudo snap alias awesomequeue.cli aq` for a shorter alias if you'd like
 one.
