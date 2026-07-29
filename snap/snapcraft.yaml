@@ -27,6 +27,11 @@ apps:
       - network
       - network-bind
 
+  cli:
+    command: bin/awesomequeue-cli
+    plugs:
+      - network
+
 parts:
   awesomequeue:
     plugin: go
@@ -36,6 +41,7 @@ parts:
       - go/1.24/stable
     override-build: |
       go build -o $SNAPCRAFT_PART_INSTALL/bin/awesomequeue-server main.go
+      go build -o $SNAPCRAFT_PART_INSTALL/bin/awesomequeue-cli ./cli
 
   redis:
     plugin: nil

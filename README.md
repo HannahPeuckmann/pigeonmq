@@ -87,12 +87,33 @@ Snap uses the defaults in the snapcraft.yaml. To modify, rebuild the snap.
 - `GET /status/?queue=<name>` - Get the full queue overview (jobs, workers, dead workers) as a rendered HTML page; `queue` is optional and scopes it to one tube
 - `GET /status.json/?queue=<name>` - Same overview as `/status/`, but as JSON; `queue` is optional and scopes it to one tube
 
+## CLI
+
+A command-line client (`aq`) is included for interacting with a running
+AwesomeQueue server without writing HTTP requests by hand. It talks to
+`http://localhost:11300` by default; override with the `AWESOMEQUEUE_ADDR`
+environment variable (e.g. `AWESOMEQUEUE_ADDR=http://queue.example.com:11300`).
+Once installed via the snap it's available as `awesomequeue.cli`:
+
+```bash
+awesomequeue.cli status [--tube <tube>]              # queue status, optionally scoped to a tube
+awesomequeue.cli job-status <job_id>                 # a single job's status
+awesomequeue.cli queue <body> --tube <tube> [--priority urgent|high|medium|low]
+                                                      # queue a job (default priority: medium)
+```
+
+`delete <job_id>` is registered but not yet implemented.
+
+Run `sudo snap alias awesomequeue.cli aq` for a shorter alias if you'd like
+one.
+
 ## Development
 
-Build the binary:
+Build the binaries:
 ```bash
 cd service
 go build -o awesomequeue-server main.go
+go build -o awesomequeue-cli ./cli
 ```
 
 Run the tests:
@@ -104,4 +125,5 @@ go test ./...
 Run locally:
 ```bash
 ./awesomequeue-server
+./awesomequeue-cli status
 ```
