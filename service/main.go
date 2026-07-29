@@ -65,14 +65,13 @@ func main() {
 }
 
 func (s *server) reserveHandler(w http.ResponseWriter, r *http.Request) {
-	var worker handlers.Worker
-	if err := json.NewDecoder(r.Body).Decode(&worker); err != nil {
-		slog.Error("error decoding worker json", "err", err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	workerID := r.URL.Query().Get("worker")
+	if workerID == "" {
+		http.Error(w, "invalid worker ID: must not be empty", http.StatusBadRequest)
 		return
 	}
 
-	job, err := handlers.ReserveJob(r.Context(), s.rdb, worker.ID)
+	job, err := handlers.ReserveJob(r.Context(), s.rdb, workerID)
 	switch {
 	case errors.Is(err, handlers.ErrNotFound):
 		http.Error(w, err.Error(), http.StatusNotFound)
@@ -84,7 +83,7 @@ func (s *server) reserveHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	case err != nil:
-		slog.Error("error reserving jobs", "err", err, "worker", worker.ID)
+		slog.Error("error reserving jobs", "err", err, "worker", workerID)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -92,18 +91,17 @@ func (s *server) reserveHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(job)
 
-	slog.Info("Reserve", "worker", worker.ID, "job", job.ID)
+	slog.Info("Reserve", "worker", workerID, "job", job.ID)
 }
 
 func (s *server) deleteHandler(w http.ResponseWriter, r *http.Request) {
-	var worker handlers.Worker
-	if err := json.NewDecoder(r.Body).Decode(&worker); err != nil {
-		slog.Error("error decoding worker json", "err", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	workerID := r.URL.Query().Get("worker")
+	if workerID == "" {
+		http.Error(w, "invalid worker ID: must not be empty", http.StatusBadRequest)
 		return
 	}
 
-	err := handlers.DeleteJob(r.Context(), s.rdb, worker.ID)
+	err := handlers.DeleteJob(r.Context(), s.rdb, workerID)
 	switch {
 	case errors.Is(err, handlers.ErrNotFound):
 		http.Error(w, err.Error(), http.StatusNotFound)
@@ -112,7 +110,7 @@ func (s *server) deleteHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusConflict)
 		return
 	case err != nil:
-		slog.Error("error deleting job", "err", err)
+		slog.Error("error deleting job", "err", err, "worker", workerID)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -160,24 +158,23 @@ func (s *server) registerWorkerHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) unregisterWorkerHandler(w http.ResponseWriter, r *http.Request) {
-	var worker handlers.Worker
-	if err := json.NewDecoder(r.Body).Decode(&worker); err != nil {
-		slog.Error("error decoding worker json", "err", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	workerID := r.URL.Query().Get("worker")
+	if workerID == "" {
+		http.Error(w, "invalid worker ID: must not be empty", http.StatusBadRequest)
 		return
 	}
 
-	err := handlers.UnregisterWorker(r.Context(), s.rdb, worker.ID)
+	err := handlers.UnregisterWorker(r.Context(), s.rdb, workerID)
 	switch {
 	case errors.Is(err, handlers.ErrNotFound):
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	case err != nil:
-		slog.Error("failed to unregister worker", "err", err, "worker", worker.ID)
+		slog.Error("failed to unregister worker", "err", err, "worker", workerID)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	slog.Info("Unregistering worker", "ID", worker.ID)
+	slog.Info("Unregistering worker", "ID", workerID)
 }
 
 func (s *server) queueHandler(w http.ResponseWriter, r *http.Request) {
@@ -228,14 +225,13 @@ func (s *server) queueHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *server) heartbeatHandler(w http.ResponseWriter, r *http.Request) {
-	var worker handlers.Worker
-	if err := json.NewDecoder(r.Body).Decode(&worker); err != nil {
-		slog.Error("error decoding worker json", "err", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	workerID := r.URL.Query().Get("worker")
+	if workerID == "" {
+		http.Error(w, "invalid worker ID: must not be empty", http.StatusBadRequest)
 		return
 	}
 
-	err := handlers.UpdateHeartbeat(r.Context(), s.rdb, worker.ID)
+	err := handlers.UpdateHeartbeat(r.Context(), s.rdb, workerID)
 	switch {
 	case errors.Is(err, handlers.ErrNotFound):
 		http.Error(w, err.Error(), http.StatusNotFound)

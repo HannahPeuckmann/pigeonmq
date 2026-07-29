@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -41,6 +40,18 @@ func TestMain(m *testing.M) {
 	srv = &server{rdb: rdb}
 
 	os.Exit(m.Run())
+}
+
+// newQueryRequest builds a request with the given query params set, for
+// handlers that read their arguments from the URL rather than a JSON body.
+func newQueryRequest(method, target string, params map[string]string) *http.Request {
+	req := httptest.NewRequest(method, target, nil)
+	query := req.URL.Query()
+	for k, v := range params {
+		query.Add(k, v)
+	}
+	req.URL.RawQuery = query.Encode()
+	return req
 }
 
 // --- registerWorkerHandler ---
@@ -100,20 +111,19 @@ func TestRegisterWorker_CreatesWorkerInRedis(t *testing.T) {
 func TestUnregisterWorker_NotFound(t *testing.T) {
 	mr.FlushAll()
 
-	body, _ := json.Marshal(handlers.Worker{ID: "ghost-worker"})
-	req := httptest.NewRequest(http.MethodPost, "/unregister/", bytes.NewReader(body))
+	req := newQueryRequest(http.MethodPost, "/unregister/", map[string]string{"worker": "ghost-worker"})
 	w := httptest.NewRecorder()
 	srv.unregisterWorkerHandler(w, req)
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
-func TestUnregisterWorker_InvalidBody(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPost, "/unregister/", bytes.NewReader([]byte("not json")))
+func TestUnregisterWorker_MissingWorkerParam(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/unregister/", nil)
 	w := httptest.NewRecorder()
 	srv.unregisterWorkerHandler(w, req)
 
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
 func TestUnregisterWorker_RemovesWorkerFromRedis(t *testing.T) {
@@ -123,8 +133,7 @@ func TestUnregisterWorker_RemovesWorkerFromRedis(t *testing.T) {
 	workerKey := "worker: worker-42"
 	rdb.HSet(ctx, workerKey, "status", "IDLE", "jobID", "none", "lastHeartbeat", "0")
 
-	body, _ := json.Marshal(handlers.Worker{ID: "worker-42"})
-	req := httptest.NewRequest(http.MethodPost, "/unregister/", bytes.NewReader(body))
+	req := newQueryRequest(http.MethodPost, "/unregister/", map[string]string{"worker": "worker-42"})
 	w := httptest.NewRecorder()
 	srv.unregisterWorkerHandler(w, req)
 
@@ -152,8 +161,7 @@ func TestUnregisterWorker_WithJob_RequeuesJob(t *testing.T) {
 		"build-start", time.Now().Unix(),
 	)
 
-	body, _ := json.Marshal(handlers.Worker{ID: "worker-99"})
-	req := httptest.NewRequest(http.MethodPost, "/unregister/", bytes.NewReader(body))
+	req := newQueryRequest(http.MethodPost, "/unregister/", map[string]string{"worker": "worker-99"})
 	w := httptest.NewRecorder()
 	srv.unregisterWorkerHandler(w, req)
 
@@ -279,8 +287,7 @@ func TestReserveHandler_SetPropertiesOnJobAndWorker(t *testing.T) {
 	rdb.HSet(ctx, jobKey, "id", "7", "priority", "3", "status", "QUEUED")
 	rdb.ZAdd(ctx, "default", redis.Z{Score: 3, Member: jobKey})
 
-	body, _ := json.Marshal(handlers.Worker{ID: "worker-30", ListenQueue: "default"})
-	req := httptest.NewRequest(http.MethodPost, "/reserve/", bytes.NewReader(body))
+	req := newQueryRequest(http.MethodPost, "/reserve/", map[string]string{"worker": "worker-30"})
 	w := httptest.NewRecorder()
 	srv.reserveHandler(w, req)
 
@@ -330,8 +337,7 @@ func TestReserveHandler_ConcurrentReserves(t *testing.T) {
 
 	reserve_routine := func(workerID string, wg *sync.WaitGroup, ch chan int) {
 		defer wg.Done()
-		body, _ := json.Marshal(handlers.Worker{ID: workerID, ListenQueue: "default"})
-		req := httptest.NewRequest(http.MethodPost, "/reserve/", bytes.NewReader(body))
+		req := newQueryRequest(http.MethodPost, "/reserve/", map[string]string{"worker": workerID})
 		w := httptest.NewRecorder()
 		srv.reserveHandler(w, req)
 		assert.Equal(t, http.StatusOK, w.Code)
@@ -380,8 +386,7 @@ func TestReserveHandler_NoJob(t *testing.T) {
 	workerKey := "worker: worker-30"
 	rdb.HSet(ctx, workerKey, "status", "IDLE", "jobID", "none", "lastHeartbeat", "0", "listenQueue", "default")
 
-	body, _ := json.Marshal(handlers.Worker{ID: "worker-30"})
-	req := httptest.NewRequest(http.MethodPost, "/reserve/", bytes.NewReader(body))
+	req := newQueryRequest(http.MethodPost, "/reserve/", map[string]string{"worker": "worker-30"})
 	w := httptest.NewRecorder()
 	srv.reserveHandler(w, req)
 
@@ -391,8 +396,7 @@ func TestReserveHandler_NoJob(t *testing.T) {
 func TestReserveHandler_WorkerNotRegistered(t *testing.T) {
 	mr.FlushAll()
 
-	body, _ := json.Marshal(handlers.Worker{ID: "worker-30"})
-	req := httptest.NewRequest(http.MethodPost, "/reserve/", bytes.NewReader(body))
+	req := newQueryRequest(http.MethodPost, "/reserve/", map[string]string{"worker": "worker-30"})
 	w := httptest.NewRecorder()
 	srv.reserveHandler(w, req)
 
@@ -406,12 +410,19 @@ func TestReserveHandler_WorkerIsBusy(t *testing.T) {
 	workerKey := "worker: worker-30"
 	rdb.HSet(ctx, workerKey, "status", "BUSY", "jobID", "7", "lastHeartbeat", "0")
 
-	body, _ := json.Marshal(handlers.Worker{ID: "worker-30"})
-	req := httptest.NewRequest(http.MethodPost, "/reserve/", bytes.NewReader(body))
+	req := newQueryRequest(http.MethodPost, "/reserve/", map[string]string{"worker": "worker-30"})
 	w := httptest.NewRecorder()
 	srv.reserveHandler(w, req)
 
 	assert.Equal(t, http.StatusConflict, w.Code)
+}
+
+func TestReserveHandler_MissingWorkerParam(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/reserve/", nil)
+	w := httptest.NewRecorder()
+	srv.reserveHandler(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
 // --- DeleteHandler ---
@@ -426,8 +437,7 @@ func TestDeleteHandler_SetPropertiesOnJobAndWorker(t *testing.T) {
 	rdb.HSet(ctx, jobKey, "id", "7", "status", "BUILDING")
 	rdb.LPush(ctx, "job_queue", jobKey)
 
-	body, _ := json.Marshal(handlers.Worker{ID: "worker-30"})
-	req := httptest.NewRequest(http.MethodPost, "/delete/", bytes.NewReader(body))
+	req := newQueryRequest(http.MethodPost, "/delete/", map[string]string{"worker": "worker-30"})
 	w := httptest.NewRecorder()
 	srv.deleteHandler(w, req)
 
@@ -453,12 +463,29 @@ func TestDeleteHandler_WorkerIsIdle(t *testing.T) {
 	workerKey := "worker: worker-30"
 	rdb.HSet(ctx, workerKey, "status", "IDLE", "jobID", "none", "lastHeartbeat", "0")
 
-	body, _ := json.Marshal(handlers.Worker{ID: "worker-30"})
-	req := httptest.NewRequest(http.MethodPost, "/delete/", bytes.NewReader(body))
+	req := newQueryRequest(http.MethodPost, "/delete/", map[string]string{"worker": "worker-30"})
 	w := httptest.NewRecorder()
 	srv.deleteHandler(w, req)
 
 	assert.Equal(t, http.StatusConflict, w.Code)
+}
+
+func TestDeleteHandler_MissingWorkerParam(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/delete/", nil)
+	w := httptest.NewRecorder()
+	srv.deleteHandler(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestDeleteHandler_WorkerNotRegistered(t *testing.T) {
+	mr.FlushAll()
+
+	req := newQueryRequest(http.MethodPost, "/delete/", map[string]string{"worker": "ghost-worker"})
+	w := httptest.NewRecorder()
+	srv.deleteHandler(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
 // --- heartbeatHandler ---
@@ -470,8 +497,7 @@ func TestHeartbeatHandler_UpdatesLastHeartbeat(t *testing.T) {
 	workerKey := "worker: worker-1"
 	rdb.HSet(ctx, workerKey, "status", "IDLE", "jobID", "none", "lastHeartbeat", "0")
 
-	body, _ := json.Marshal(handlers.Worker{ID: "worker-1"})
-	req := httptest.NewRequest(http.MethodPost, "/heartbeat/", bytes.NewReader(body))
+	req := newQueryRequest(http.MethodPost, "/heartbeat/", map[string]string{"worker": "worker-1"})
 	w := httptest.NewRecorder()
 	srv.heartbeatHandler(w, req)
 
@@ -485,20 +511,19 @@ func TestHeartbeatHandler_UpdatesLastHeartbeat(t *testing.T) {
 func TestHeartbeatHandler_WorkerNotRegistered(t *testing.T) {
 	mr.FlushAll()
 
-	body, _ := json.Marshal(handlers.Worker{ID: "ghost-worker"})
-	req := httptest.NewRequest(http.MethodPost, "/heartbeat/", bytes.NewReader(body))
+	req := newQueryRequest(http.MethodPost, "/heartbeat/", map[string]string{"worker": "ghost-worker"})
 	w := httptest.NewRecorder()
 	srv.heartbeatHandler(w, req)
 
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
-func TestHeartbeatHandler_InvalidBody(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPost, "/heartbeat/", bytes.NewReader([]byte("not json")))
+func TestHeartbeatHandler_MissingWorkerParam(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/heartbeat/", nil)
 	w := httptest.NewRecorder()
 	srv.heartbeatHandler(w, req)
 
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
 // --- checkHeartbeat ---
