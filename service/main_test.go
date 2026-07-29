@@ -546,8 +546,8 @@ func TestCheckHeartbeat_CleanUpStaleWorkers(t *testing.T) {
 	assert.Equal(t, int64(0), exists)
 }
 
-// --- statusWorkerHandler ---
-func TestJsonStatusHandler(t *testing.T) {
+// --- aggregateStatusHandler ---
+func TestAggregateStatusHandler(t *testing.T) {
 	mr.FlushAll()
 	ctx := context.Background()
 
@@ -556,9 +556,9 @@ func TestJsonStatusHandler(t *testing.T) {
 	rdb.HSet(ctx, "job: 3", "id", 3, "priority", "medium", "status", "QUEUED")
 	rdb.HSet(ctx, "worker: worker-1", "status", "BUSY", "jobID", "7", "lastHeartbeat", "0")
 
-	req := httptest.NewRequest(http.MethodGet, "/json-status/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/aggregate-status/", nil)
 	w := httptest.NewRecorder()
-	srv.jsonStatusHandler(w, req)
+	srv.aggregateStatusHandler(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
@@ -630,9 +630,9 @@ func TestJobStatusHandler_JobNotFound(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
-// --- tubeStatusHandler ---
+// --- aggregateStatusHandler, scoped to a tube ---
 
-func TestTubeStatusHandler_ScopesCountsToTube(t *testing.T) {
+func TestAggregateStatusHandler_ScopesCountsToTube(t *testing.T) {
 	mr.FlushAll()
 	ctx := context.Background()
 
@@ -649,12 +649,12 @@ func TestTubeStatusHandler_ScopesCountsToTube(t *testing.T) {
 	// job on a different tube, must not be counted
 	rdb.HSet(ctx, "job: 4", "id", "4", "status", "QUEUED", "queue", "other")
 
-	req := httptest.NewRequest(http.MethodGet, "/tubestatus/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/aggregate-status/", nil)
 	query := req.URL.Query()
 	query.Add("queue", "default")
 	req.URL.RawQuery = query.Encode()
 	w := httptest.NewRecorder()
-	srv.tubeStatusHandler(w, req)
+	srv.aggregateStatusHandler(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
@@ -669,19 +669,19 @@ func TestTubeStatusHandler_ScopesCountsToTube(t *testing.T) {
 	assert.Equal(t, 1, status.JobsDone)
 }
 
-func TestTubeStatusHandler_NoMatchingTube(t *testing.T) {
+func TestAggregateStatusHandler_NoMatchingTube(t *testing.T) {
 	mr.FlushAll()
 	ctx := context.Background()
 
 	rdb.HSet(ctx, "worker: 1", "status", "IDLE", "jobID", "none", "lastHeartbeat", "0", "listenQueue", "default")
 	rdb.HSet(ctx, "job: 1", "id", "1", "status", "QUEUED", "queue", "default")
 
-	req := httptest.NewRequest(http.MethodGet, "/tubestatus/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/aggregate-status/", nil)
 	query := req.URL.Query()
 	query.Add("queue", "nonexistent")
 	req.URL.RawQuery = query.Encode()
 	w := httptest.NewRecorder()
-	srv.tubeStatusHandler(w, req)
+	srv.aggregateStatusHandler(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
@@ -690,12 +690,25 @@ func TestTubeStatusHandler_NoMatchingTube(t *testing.T) {
 	assert.Equal(t, handlers.JsonStatus{}, status)
 }
 
-func TestTubeStatusHandler_MissingQueueParam(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/tubestatus/", nil)
-	w := httptest.NewRecorder()
-	srv.tubeStatusHandler(w, req)
+func TestAggregateStatusHandler_MissingQueueParamCountsAllTubes(t *testing.T) {
+	mr.FlushAll()
+	ctx := context.Background()
 
-	assert.Equal(t, http.StatusBadRequest, w.Code)
+	rdb.HSet(ctx, "worker: 1", "status", "IDLE", "jobID", "none", "lastHeartbeat", "0", "listenQueue", "default")
+	rdb.HSet(ctx, "worker: 2", "status", "IDLE", "jobID", "none", "lastHeartbeat", "0", "listenQueue", "other")
+	rdb.HSet(ctx, "job: 1", "id", "1", "status", "QUEUED", "queue", "default")
+	rdb.HSet(ctx, "job: 2", "id", "2", "status", "QUEUED", "queue", "other")
+
+	req := httptest.NewRequest(http.MethodGet, "/aggregate-status/", nil)
+	w := httptest.NewRecorder()
+	srv.aggregateStatusHandler(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var status handlers.JsonStatus
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&status))
+	assert.Equal(t, 2, status.TotalWorkers)
+	assert.Equal(t, 2, status.JobsReady)
 }
 
 // --- htmlStatusHandler ---
@@ -736,4 +749,49 @@ func TestHtmlStatusHandler_NoJobsOrWorkers(t *testing.T) {
 	body := w.Body.String()
 	assert.Contains(t, body, "No jobs")
 	assert.Contains(t, body, "No workers")
+}
+
+// --- overviewHandler ---
+
+func TestOverviewHandler_ReturnsJobsAndWorkersAsJson(t *testing.T) {
+	mr.FlushAll()
+	ctx := context.Background()
+
+	rdb.HSet(ctx, "job: 1", "id", "1", "status", "QUEUED", "priority", "2", "queue", "default")
+	rdb.HSet(ctx, "job: 2", "id", "2", "status", "QUEUED", "priority", "2", "queue", "other")
+	rdb.HSet(ctx, "worker: 99", "status", "BUSY", "jobID", "1", "lastHeartbeat", "0", "listenQueue", "default")
+
+	req := httptest.NewRequest(http.MethodGet, "/status.json/", nil)
+	w := httptest.NewRecorder()
+	srv.overviewHandler(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
+
+	var data handlers.StatusData
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&data))
+	assert.Len(t, data.Jobs, 2)
+	assert.Len(t, data.Workers, 1)
+}
+
+func TestOverviewHandler_ScopesToTube(t *testing.T) {
+	mr.FlushAll()
+	ctx := context.Background()
+
+	rdb.HSet(ctx, "job: 1", "id", "1", "status", "QUEUED", "priority", "2", "queue", "default")
+	rdb.HSet(ctx, "job: 2", "id", "2", "status", "QUEUED", "priority", "2", "queue", "other")
+
+	req := httptest.NewRequest(http.MethodGet, "/status.json/", nil)
+	query := req.URL.Query()
+	query.Add("queue", "default")
+	req.URL.RawQuery = query.Encode()
+	w := httptest.NewRecorder()
+	srv.overviewHandler(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var data handlers.StatusData
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&data))
+	require.Len(t, data.Jobs, 1)
+	assert.Equal(t, "1", data.Jobs[0].ID)
 }

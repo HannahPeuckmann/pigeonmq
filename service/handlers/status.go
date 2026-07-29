@@ -23,7 +23,7 @@ type JsonStatus struct {
 	JobsDone     int `json:"jobsDone"`
 }
 
-func GetHtmlStatus(ctx context.Context, rdb *redis.Client) (StatusData, error) {
+func GetStatusOverview(ctx context.Context, rdb *redis.Client, tube string) (StatusData, error) {
 	var data StatusData
 
 	workerKeys, err := rdb.Keys(ctx, "worker: *").Result()
@@ -33,6 +33,9 @@ func GetHtmlStatus(ctx context.Context, rdb *redis.Client) (StatusData, error) {
 	for _, wkey := range workerKeys {
 		var w Worker
 		if err := rdb.HGetAll(ctx, wkey).Scan(&w); err != nil {
+			continue
+		}
+		if tube != "" && w.ListenQueue != tube {
 			continue
 		}
 		w.ID = strings.TrimPrefix(wkey, "worker: ")
@@ -48,6 +51,9 @@ func GetHtmlStatus(ctx context.Context, rdb *redis.Client) (StatusData, error) {
 		if err := rdb.HGetAll(ctx, wkey).Scan(&w); err != nil {
 			continue
 		}
+		if tube != "" && w.ListenQueue != tube {
+			continue
+		}
 		w.ID = strings.TrimPrefix(wkey, "worker: ")
 		data.DeadWorkers = append(data.DeadWorkers, w)
 	}
@@ -59,6 +65,9 @@ func GetHtmlStatus(ctx context.Context, rdb *redis.Client) (StatusData, error) {
 	for _, jkey := range jobKeys {
 		var j Job
 		if err := rdb.HGetAll(ctx, jkey).Scan(&j); err != nil {
+			continue
+		}
+		if tube != "" && j.Queue != tube {
 			continue
 		}
 		data.Jobs = append(data.Jobs, j)
@@ -87,7 +96,9 @@ func GetJobStatus(ctx context.Context, rdb *redis.Client, jobID string) (Job, er
 	return job, nil
 }
 
-func GetJsonStatus(ctx context.Context, rdb *redis.Client) (JsonStatus, error) {
+// GetAggregateStatus returns worker/job counts. If tube is empty, all tubes are counted;
+// otherwise only workers/jobs belonging to that tube are counted.
+func GetAggregateStatus(ctx context.Context, rdb *redis.Client, tube string) (JsonStatus, error) {
 	var status JsonStatus
 
 	workerKeys, err := rdb.Keys(ctx, "worker: *").Result()
@@ -97,6 +108,9 @@ func GetJsonStatus(ctx context.Context, rdb *redis.Client) (JsonStatus, error) {
 	for _, key := range workerKeys {
 		workerData, err := rdb.HGetAll(ctx, key).Result()
 		if err != nil {
+			continue
+		}
+		if tube != "" && workerData["listenQueue"] != tube {
 			continue
 		}
 		status.TotalWorkers++
@@ -116,6 +130,9 @@ func GetJsonStatus(ctx context.Context, rdb *redis.Client) (JsonStatus, error) {
 		if err != nil {
 			continue
 		}
+		if tube != "" && jobData["queue"] != tube {
+			continue
+		}
 		switch jobData["status"] {
 		case "QUEUED":
 			status.JobsReady++
@@ -123,53 +140,6 @@ func GetJsonStatus(ctx context.Context, rdb *redis.Client) (JsonStatus, error) {
 			status.JobsReserved++
 		case "DONE":
 			status.JobsDone++
-		}
-	}
-
-	return status, nil
-}
-
-func GetTubeStatus(ctx context.Context, rdb *redis.Client, tube string) (JsonStatus, error) {
-	var status JsonStatus
-
-	workerKeys, err := rdb.Keys(ctx, "worker: *").Result()
-	if err != nil {
-		return status, err
-	}
-	for _, key := range workerKeys {
-		workerData, err := rdb.HGetAll(ctx, key).Result()
-		if err != nil {
-			continue
-		}
-		if workerData["listenQueue"] == tube {
-			status.TotalWorkers++
-			if workerData["status"] == "IDLE" {
-				status.IdleWorkers++
-			} else {
-				status.BusyWorkers++
-			}
-		}
-	}
-
-	jobKeys, err := rdb.Keys(ctx, "job: *").Result()
-	if err != nil {
-		return status, err
-	}
-	for _, key := range jobKeys {
-		jobData, err := rdb.HGetAll(ctx, key).Result()
-		if err != nil {
-			continue
-		}
-
-		if jobData["queue"] == tube {
-			switch jobData["status"] {
-			case "QUEUED":
-				status.JobsReady++
-			case "BUILDING":
-				status.JobsReserved++
-			case "DONE":
-				status.JobsDone++
-			}
 		}
 	}
 

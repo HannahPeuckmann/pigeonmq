@@ -53,9 +53,9 @@ func main() {
 	http.HandleFunc("/unregister/", s.unregisterWorkerHandler)
 	http.HandleFunc("/queue/", s.queueHandler)
 	http.HandleFunc("/heartbeat/", s.heartbeatHandler)
-	http.HandleFunc("/json-status/", s.jsonStatusHandler)
+	http.HandleFunc("/aggregate-status/", s.aggregateStatusHandler)
 	http.HandleFunc("/status/", s.htmlStatusHandler)
-	http.HandleFunc("/tubestatus/", s.tubeStatusHandler)
+	http.HandleFunc("/status.json/", s.overviewHandler)
 	http.HandleFunc("/job-status/", s.jobStatusHandler)
 
 	slog.Info("Starting AwesomeQueue server, starting heartbeat goroutine")
@@ -235,8 +235,11 @@ func (s *server) heartbeatHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *server) jsonStatusHandler(w http.ResponseWriter, r *http.Request) {
-	status, err := handlers.GetJsonStatus(r.Context(), s.rdb)
+// aggregateStatusHandler returns worker/job counts as JSON. An optional ?queue=
+// param restricts the counts to that tube; omitted, it covers all tubes.
+func (s *server) aggregateStatusHandler(w http.ResponseWriter, r *http.Request) {
+	queue := r.URL.Query().Get("queue")
+	status, err := handlers.GetAggregateStatus(r.Context(), s.rdb, queue)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -245,8 +248,11 @@ func (s *server) jsonStatusHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(status)
 }
 
+// htmlStatusHandler renders the full overview (jobs, workers, dead workers) as
+// an HTML page. An optional ?queue= param restricts it to that tube.
 func (s *server) htmlStatusHandler(w http.ResponseWriter, r *http.Request) {
-	data, err := handlers.GetHtmlStatus(r.Context(), s.rdb)
+	queue := r.URL.Query().Get("queue")
+	data, err := handlers.GetStatusOverview(r.Context(), s.rdb, queue)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -255,19 +261,17 @@ func (s *server) htmlStatusHandler(w http.ResponseWriter, r *http.Request) {
 	tmpl.Execute(w, data)
 }
 
-func (s *server) tubeStatusHandler(w http.ResponseWriter, r *http.Request) {
+// overviewHandler returns the same full overview as htmlStatusHandler, but as
+// JSON. An optional ?queue= param restricts it to that tube.
+func (s *server) overviewHandler(w http.ResponseWriter, r *http.Request) {
 	queue := r.URL.Query().Get("queue")
-	if queue == "" {
-		http.Error(w, "invalid queue name: must not be empty", http.StatusBadRequest)
-		return
-	}
-	status, err := handlers.GetTubeStatus(r.Context(), s.rdb, queue)
+	data, err := handlers.GetStatusOverview(r.Context(), s.rdb, queue)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(status)
+	json.NewEncoder(w).Encode(data)
 }
 
 // do to list queues

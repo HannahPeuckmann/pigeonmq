@@ -82,9 +82,10 @@ Snap uses the defaults in the snapcraft.yaml. To modify, rebuild the snap.
 - `POST /reserve/` - Reserve a job for processing (JSON body: `{"id": "<workerID>"}`); returns `200` with the job, or `204` if no job is available
 - `POST /delete/` - Mark the worker's in-progress job as done (JSON body: `{"id": "<workerID>"}`)
 - `POST /heartbeat/` - Worker heartbeat (JSON body: `{"id": "<workerID>"}`)
-- `GET /json-status/` - Get queue status as JSON (`totalWorkers`, `idleWorkers`, `busyWorkers`, `jobsReady`, `jobsReserved`, `jobsDone`)
+- `GET /aggregate-status/?queue=<name>` - Get queue status counts as JSON (`totalWorkers`, `idleWorkers`, `busyWorkers`, `jobsReady`, `jobsReserved`, `jobsDone`); `queue` is optional and scopes the counts to one tube
 - `GET /job-status/?job=<id>` - Get a single job's status by ID
-- `GET /status/` - Get queue status as a rendered HTML page
+- `GET /status/?queue=<name>` - Get the full queue overview (jobs, workers, dead workers) as a rendered HTML page; `queue` is optional and scopes it to one tube
+- `GET /status.json/?queue=<name>` - Same overview as `/status/`, but as JSON; `queue` is optional and scopes it to one tube
 
 ## Development
 
