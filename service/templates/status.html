@@ -35,6 +35,7 @@ h2 {
             <th>Priority</th>
             <th>Payload</th>
             <th>Worker</th>
+            <th>Queue</th>
         </tr>
     </thead>
     <tbody>
@@ -45,9 +46,10 @@ h2 {
             <td>{{.Priority}}</td>
             <td>{{printf "%s" .Payload}}</td>
             <td>{{.Worker}}</td>
+            <td>{{.Queue}}</td>
         </tr>
         {{else}}
-        <tr><td colspan="4">No jobs</td></tr>
+        <tr><td colspan="6">No jobs</td></tr>
         {{end}}
     </tbody>
 </table>
@@ -61,6 +63,7 @@ h2 {
             <th>Job</th>
             <th>Last Heartbeat</th>
             <th>Status</th>
+            <th>Queue</th>
         </tr>
     </thead>
     <tbody>
@@ -71,9 +74,10 @@ h2 {
             <td>{{.Job}}</td>
             <td>{{.LastHeartbeat}}</td>
             <td>{{.Status}}</td>
+            <td>{{.ListenQueue}}</td>
         </tr>
         {{else}}
-        <tr><td colspan="5">No workers</td></tr>
+        <tr><td colspan="6">No workers</td></tr>
         {{end}}
     </tbody>
 </table>
