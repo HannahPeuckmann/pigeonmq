@@ -84,12 +84,15 @@ func (s *server) reserveHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	case err != nil:
+		slog.Error("error reserving jobs", "err", err, "worker", worker.ID)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(job)
+
+	slog.Info("Reserve", "worker", worker.ID, "job", job.ID)
 }
 
 func (s *server) deleteHandler(w http.ResponseWriter, r *http.Request) {
@@ -109,6 +112,7 @@ func (s *server) deleteHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusConflict)
 		return
 	case err != nil:
+		slog.Error("error deleting job", "err", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -126,6 +130,7 @@ func (s *server) jobStatusHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	case err != nil:
+		slog.Error("failed to get job status", "err", err, "job", job.ID)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -144,11 +149,14 @@ func (s *server) registerWorkerHandler(w http.ResponseWriter, r *http.Request) {
 	nickname := r.URL.Query().Get("nickname")
 	workerID, err := handlers.RegisterWorker(r.Context(), s.rdb, queue, nickname)
 	if err != nil {
+		slog.Error("failed to register worker", "err", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]int64{"workerID": workerID})
+
+	slog.Info("New worker registered", "ID", workerID, "Nickname", nickname)
 }
 
 func (s *server) unregisterWorkerHandler(w http.ResponseWriter, r *http.Request) {
@@ -165,9 +173,11 @@ func (s *server) unregisterWorkerHandler(w http.ResponseWriter, r *http.Request)
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	case err != nil:
+		slog.Error("failed to unregister worker", "err", err, "worker", worker.ID)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	slog.Info("Unregistering worker", "ID", worker.ID)
 }
 
 func (s *server) queueHandler(w http.ResponseWriter, r *http.Request) {
@@ -209,6 +219,7 @@ func (s *server) queueHandler(w http.ResponseWriter, r *http.Request) {
 
 	jobID, err := handlers.QueueJob(r.Context(), s.rdb, body, priority, queue)
 	if err != nil {
+		slog.Error("error queueing job", "err", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -230,6 +241,7 @@ func (s *server) heartbeatHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	case err != nil:
+		slog.Error("failed to register heartbeat", "err", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -241,6 +253,7 @@ func (s *server) aggregateStatusHandler(w http.ResponseWriter, r *http.Request) 
 	queue := r.URL.Query().Get("queue")
 	status, err := handlers.GetAggregateStatus(r.Context(), s.rdb, queue)
 	if err != nil {
+		slog.Error("failed to get status summary", "err", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -254,6 +267,7 @@ func (s *server) htmlStatusHandler(w http.ResponseWriter, r *http.Request) {
 	queue := r.URL.Query().Get("queue")
 	data, err := handlers.GetStatusOverview(r.Context(), s.rdb, queue)
 	if err != nil {
+		slog.Error("failed to get status", "err", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -267,6 +281,7 @@ func (s *server) overviewHandler(w http.ResponseWriter, r *http.Request) {
 	queue := r.URL.Query().Get("queue")
 	data, err := handlers.GetStatusOverview(r.Context(), s.rdb, queue)
 	if err != nil {
+		slog.Error("failed to get status", "err", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
