@@ -25,7 +25,7 @@ func UpdateHeartbeat(ctx context.Context, rdb *redis.Client, workerID string) er
 	return err
 }
 
-const heartbeatTimeout = 5 * time.Minute
+const heartbeatTimeout = 3 * time.Minute
 
 func CheckHeartbeatsLoop(rdb *redis.Client) {
 	ticker := time.NewTicker(heartbeatTimeout)
