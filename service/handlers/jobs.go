@@ -144,7 +144,7 @@ func CancelJob(ctx context.Context, rdb *redis.Client, jobID string) error {
 	}
 
 	p := rdb.Pipeline()
-	p.HSet(ctx, jobKey, "status", "DONE")
+	p.HSet(ctx, jobKey, "status", "CANCELLED")
 	p.HSet(ctx, jobKey, "build-finish", time.Now())
 	p.Expire(ctx, jobKey, 5*24*time.Hour)
 	p.ZRem(ctx, jobData["queue"], jobKey)
