@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
 	"strings"
 
 	"awesomequeue/handlers"
@@ -47,6 +48,7 @@ func Execute() {
 
 func init() {
 	statusCmd.Flags().String("tube", "", "filter status by tube")
+	statusCmd.Flags().Bool("all", false, "include DONE and CANCELLED jobs")
 	queueCmd.Flags().String("tube", "", "tube to queue the job on")
 	queueCmd.MarkFlagRequired("tube")
 	queueCmd.Flags().String("priority", "medium", "job priority: urgent, high, medium, or low")
@@ -62,8 +64,9 @@ var statusCmd = &cobra.Command{
 	Short: "Display the server status",
 	Run: func(cmd *cobra.Command, args []string) {
 		tube, _ := cmd.Flags().GetString("tube")
+		all, _ := cmd.Flags().GetBool("all")
 
-		status, err := getStatus(tube)
+		status, err := getStatus(tube, all)
 		if err != nil {
 			slog.Error("error fetching status", "err", err)
 			return
@@ -185,7 +188,7 @@ var cancelCmd = &cobra.Command{
 	},
 }
 
-func getStatus(tube string) (*handlers.StatusData, error) {
+func getStatus(tube string, all bool) (*handlers.StatusData, error) {
 	statusURL, err := url.Parse(fmt.Sprintf("%s/status.json/", serverAddr))
 	if err != nil {
 		return nil, err
@@ -212,6 +215,13 @@ func getStatus(tube string) (*handlers.StatusData, error) {
 		slog.Error("error decoding status response json", "err", err)
 		return nil, err
 	}
+
+	if !all {
+		status.Jobs = slices.DeleteFunc(status.Jobs, func(j handlers.Job) bool {
+			return j.Status == "CANCELLED" || j.Status == "DONE"
+		})
+	}
+
 	return &status, nil
 }
 
