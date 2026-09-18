@@ -24,6 +24,14 @@ h2 {
     font-family: sans-serif;
     margin-top: 2rem;
 }
+
+summary {
+    font-family: sans-serif;
+    font-size: 1.17rem;
+    font-weight: bold;
+    cursor: pointer;
+    margin-top: 2rem;
+}
 </style>
 
 <h2>Jobs</h2>
@@ -39,7 +47,7 @@ h2 {
         </tr>
     </thead>
     <tbody>
-        {{range .Jobs}}
+        {{range jobsWithStatus .Jobs "QUEUED" "BUILDING"}}
         <tr>
             <td>{{.ID}}</td>
             <td>{{.Status}}</td>
@@ -49,10 +57,40 @@ h2 {
             <td>{{.Queue}}</td>
         </tr>
         {{else}}
-        <tr><td colspan="6">No jobs</td></tr>
+        <tr><td colspan="6">No active jobs</td></tr>
         {{end}}
     </tbody>
 </table>
+
+<details>
+    <summary>Finished Jobs</summary>
+    <table class="table-bordered">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Status</th>
+                <th>Priority</th>
+                <th>Payload</th>
+                <th>Worker</th>
+                <th>Queue</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range jobsWithStatus .Jobs "DONE" "CANCELLED"}}
+            <tr>
+                <td>{{.ID}}</td>
+                <td>{{.Status}}</td>
+                <td>{{.Priority}}</td>
+                <td>{{printf "%s" .Payload}}</td>
+                <td>{{.Worker}}</td>
+                <td>{{.Queue}}</td>
+            </tr>
+            {{else}}
+            <tr><td colspan="6">No finished jobs</td></tr>
+            {{end}}
+        </tbody>
+    </table>
+</details>
 
 <h2>Workers</h2>
 <table class="table-bordered">

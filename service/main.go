@@ -22,6 +22,21 @@ type server struct {
 	queues []string
 }
 
+// statusTemplateFuncs are helper functions exposed to templates/status.html.
+var statusTemplateFuncs = template.FuncMap{
+	// jobsWithStatus returns the subset of jobs whose Status is one of statuses,
+	// letting the template split the job list into sections without mutating data.
+	"jobsWithStatus": func(jobs []handlers.Job, statuses ...string) []handlers.Job {
+		var filtered []handlers.Job
+		for _, j := range jobs {
+			if slices.Contains(statuses, j.Status) {
+				filtered = append(filtered, j)
+			}
+		}
+		return filtered
+	},
+}
+
 const (
 	PriorityUrgent float64 = 0
 	PriorityHigh   float64 = 1
@@ -293,7 +308,7 @@ func (s *server) htmlStatusHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	tmpl := template.Must(template.ParseFiles(filepath.Join(os.Getenv("SNAP"), "templates", "status.html")))
+	tmpl := template.Must(template.New("status.html").Funcs(statusTemplateFuncs).ParseFiles(filepath.Join(os.Getenv("SNAP"), "templates", "status.html")))
 	tmpl.Execute(w, data)
 }
 
