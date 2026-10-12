@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"awesomequeue/handlers"
+	"pigeonmq/handlers"
 	"strings"
 
 	"github.com/alicebob/miniredis/v2"

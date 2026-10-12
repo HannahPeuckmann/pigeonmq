@@ -1,14 +1,14 @@
 /*
-aq is the command-line client for AwesomeQueue. It talks to a running
-awesomequeue-server over HTTP, at http://localhost:11300 by default; set
-AWESOMEQUEUE_ADDR to point it elsewhere.
+pmq is the command-line client for PigeonMQ. It talks to a running
+pigeonmq-server over HTTP, at http://localhost:11300 by default; set
+PIGEONMQ_ADDR to point it elsewhere.
 
-Without arguments, aq prints command help. With a command, it executes the
+Without arguments, pmq prints command help. With a command, it executes the
 requested operation. Commands may define their own flags.
 
 Usage:
 
-	aq <command> [command flags] [args...]
+	pmq <command> [command flags] [args...]
 
 The available commands:
 
@@ -26,7 +26,7 @@ The available commands:
 */
 package main
 
-import "awesomequeue/cli/cmd"
+import "pigeonmq/cli/cmd"
 
 func main() {
 	cmd.Execute()

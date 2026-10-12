@@ -12,7 +12,7 @@ import (
 	"slices"
 	"strings"
 
-	"awesomequeue/handlers"
+	"pigeonmq/handlers"
 
 	"github.com/fatih/color"
 	"github.com/rodaine/table"
@@ -25,19 +25,19 @@ const defaultAddr = "http://localhost:11300"
 // don't blow out the terminal line; anything longer wraps onto extra lines.
 const maxBodyWidth = 60
 
-// serverAddr is the base URL of the awesomequeue-server to talk to. It
-// defaults to defaultAddr, overridable via the AWESOMEQUEUE_ADDR env var.
+// serverAddr is the base URL of the pigeonmq-server to talk to. It
+// defaults to defaultAddr, overridable via the PIGEONMQ_ADDR env var.
 var serverAddr = func() string {
-	if addr := os.Getenv("AWESOMEQUEUE_ADDR"); addr != "" {
+	if addr := os.Getenv("PIGEONMQ_ADDR"); addr != "" {
 		return strings.TrimSuffix(addr, "/")
 	}
 	return defaultAddr
 }()
 
 var rootCmd = &cobra.Command{
-	Use:   "aq",
-	Short: "Awesomequeue admin CLI",
-	Long:  "Awesomequeue control tool for managing and monitoring the queue",
+	Use:   "pmq",
+	Short: "PigeonMQ admin CLI",
+	Long:  "PigeonMQ control tool for managing and monitoring the queue",
 }
 
 func Execute() {

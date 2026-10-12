@@ -1,17 +1,17 @@
-name: awesomequeue
+name: pigeonmq
 base: core24
 version: '1.0'
 summary: A distributed job queue service
 description: |
-  AwesomeQueue is a Redis-backed job queue service that manages
+  PigeonMQ is a Redis-backed job queue service that manages
   distributed workers and job processing via an HTTP interface.
 
 grade: stable
 confinement: strict
 
 apps:
-  awesomequeue:
-    command: bin/awesomequeue-server
+  pigeonmq:
+    command: bin/pigeonmq-server
     daemon: simple
     plugs:
       - network
@@ -28,20 +28,20 @@ apps:
       - network-bind
 
   cli:
-    command: bin/awesomequeue-cli
+    command: bin/pigeonmq-cli
     plugs:
       - network
 
 parts:
-  awesomequeue:
+  pigeonmq:
     plugin: go
     source: ./service
     source-type: local
     build-snaps:
       - go/1.24/stable
     override-build: |
-      go build -o $SNAPCRAFT_PART_INSTALL/bin/awesomequeue-server main.go
-      go build -o $SNAPCRAFT_PART_INSTALL/bin/awesomequeue-cli ./cli
+      go build -o $SNAPCRAFT_PART_INSTALL/bin/pigeonmq-server main.go
+      go build -o $SNAPCRAFT_PART_INSTALL/bin/pigeonmq-cli ./cli
 
   redis:
     plugin: nil

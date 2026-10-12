@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"text/template"
 
-	"awesomequeue/handlers"
+	"pigeonmq/handlers"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -74,9 +74,9 @@ func main() {
 	http.HandleFunc("/status.json/", s.overviewHandler)
 	http.HandleFunc("/job-status/", s.jobStatusHandler)
 
-	slog.Info("Starting AwesomeQueue server, starting heartbeat goroutine")
+	slog.Info("Starting PigeonMQ server, starting heartbeat goroutine")
 	go handlers.CheckHeartbeatsLoop(s.rdb)
-	slog.Info("Starting AwesomeQueue server", "listen", listenAddr, "redis", redisAddr)
+	slog.Info("Starting PigeonMQ server", "listen", listenAddr, "redis", redisAddr)
 	http.ListenAndServe(listenAddr, nil)
 }
 
