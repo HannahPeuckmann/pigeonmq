@@ -69,14 +69,14 @@ func UnregisterWorker(ctx context.Context, rdb *redis.Client, workerID string) e
 		}
 	}
 
-	// keep a history of dead workers for two days
+	// keep a history of dead workers for five days
 	_, err = rdb.HSet(ctx,
 		fmt.Sprintf("dead-worker: %s", workerID),
 		"listenQueue", w.ListenQueue,
 		"nickname", w.Nickname,
 	).Result()
 
-	rdb.Expire(ctx, fmt.Sprintf("dead-worker: %s", workerID), 2*24*time.Hour)
+	rdb.Expire(ctx, fmt.Sprintf("dead-worker: %s", workerID), 5*24*time.Hour)
 
 	if err != nil {
 		return err
