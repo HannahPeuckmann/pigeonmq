@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -80,6 +81,12 @@ func CheckHeartbeats(rdb *redis.Client) error {
 				}
 			}
 			slog.Info("Removing stale worker", "worker", key, "lastHeartbeat", timeSinceLastHeartbeat)
+			var w Worker
+			if err := rdb.HGetAll(ctx, key).Scan(&w); err == nil {
+				if err := recordDeadWorker(ctx, rdb, strings.TrimPrefix(key, "worker: "), w, "STALE"); err != nil {
+					slog.Error("Failed to record stale worker history", "worker", key, "err", err)
+				}
+			}
 			if _, err := rdb.Del(ctx, key).Result(); err != nil {
 				slog.Error("Failed to delete stale worker", "worker", key, "err", err)
 			}

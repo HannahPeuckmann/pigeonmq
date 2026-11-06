@@ -69,20 +69,30 @@ func UnregisterWorker(ctx context.Context, rdb *redis.Client, workerID string) e
 		}
 	}
 
-	// keep a history of dead workers for five days
-	_, err = rdb.HSet(ctx,
-		fmt.Sprintf("dead-worker: %s", workerID),
-		"listenQueue", w.ListenQueue,
-		"nickname", w.Nickname,
-	).Result()
-
-	rdb.Expire(ctx, fmt.Sprintf("dead-worker: %s", workerID), 5*24*time.Hour)
-
-	if err != nil {
+	if err := recordDeadWorker(ctx, rdb, workerID, w, "DEREGISTERED"); err != nil {
 		return err
 	}
 
 	_, err = rdb.Del(ctx, workerKey).Result()
+	return err
+}
+
+const deadWorkerRetention = 5 * 24 * time.Hour
+
+// recordDeadWorker keeps a history entry for a worker that is gone, either
+// because it deregistered or because it stopped sending heartbeats.
+func recordDeadWorker(ctx context.Context, rdb *redis.Client, workerID string, w Worker, status string) error {
+	key := fmt.Sprintf("dead-worker: %s", workerID)
+	p := rdb.Pipeline()
+	p.HSet(ctx, key,
+		"listenQueue", w.ListenQueue,
+		"nickname", w.Nickname,
+		"lastHeartbeat", w.LastHeartbeat,
+		"jobID", w.Job,
+		"status", status,
+	)
+	p.Expire(ctx, key, deadWorkerRetention)
+	_, err := p.Exec(ctx)
 	return err
 }
 

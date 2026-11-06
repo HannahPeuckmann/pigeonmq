@@ -54,7 +54,10 @@ func GetStatusOverview(ctx context.Context, rdb *redis.Client, tube string) (Sta
 		if tube != "" && w.ListenQueue != tube {
 			continue
 		}
-		w.ID = strings.TrimPrefix(wkey, "worker: ")
+		w.ID = strings.TrimPrefix(wkey, "dead-worker: ")
+		if w.Status == "" {
+			w.Status = "DEREGISTERED"
+		}
 		data.DeadWorkers = append(data.DeadWorkers, w)
 	}
 

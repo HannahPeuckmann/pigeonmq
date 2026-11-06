@@ -48,7 +48,7 @@ func Execute() {
 
 func init() {
 	statusCmd.Flags().String("tube", "", "filter status by tube")
-	statusCmd.Flags().Bool("all", false, "include DONE and CANCELLED jobs")
+	statusCmd.Flags().Bool("all", false, "include DONE and CANCELLED jobs and workers that are gone")
 	queueCmd.Flags().String("tube", "", "tube to queue the job on")
 	queueCmd.MarkFlagRequired("tube")
 	queueCmd.Flags().String("priority", "medium", "job priority: urgent, high, medium, or low")
@@ -88,6 +88,11 @@ var statusCmd = &cobra.Command{
 
 		for _, w := range status.Workers {
 			workertbl.AddRow(w.ID, w.Nickname, w.Status, w.Job, w.LastHeartbeat)
+		}
+		if all {
+			for _, w := range status.DeadWorkers {
+				workertbl.AddRow(w.ID, w.Nickname, w.Status, w.Job, w.LastHeartbeat)
+			}
 		}
 
 		jobtbl.Print()
