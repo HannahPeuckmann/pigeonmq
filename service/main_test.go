@@ -507,10 +507,10 @@ func TestCancelHandler_CancelsQueuedJob(t *testing.T) {
 
 	newJobStatus, err := rdb.HGet(ctx, jobKey, "status").Result()
 	require.NoError(t, err)
-	assert.Equal(t, "DONE", newJobStatus)
+	assert.Equal(t, "CANCELLED", newJobStatus)
 
 	// a cancelled job must also come off its priority queue, otherwise a
-	// worker can still reserve it later despite it being marked DONE.
+	// worker can still reserve it later despite it being marked CANCELLED.
 	_, err = rdb.ZScore(ctx, queueName, jobKey).Result()
 	assert.ErrorIs(t, err, redis.Nil, "job should have been removed from its queue")
 }
@@ -830,7 +830,8 @@ func TestHtmlStatusHandler_NoJobsOrWorkers(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	body := w.Body.String()
-	assert.Contains(t, body, "No jobs")
+	assert.Contains(t, body, "No active jobs")
+	assert.Contains(t, body, "No finished jobs")
 	assert.Contains(t, body, "No workers")
 }
 
